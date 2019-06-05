@@ -37,12 +37,18 @@ main =
 -- MODEL
 
 
+type BoardType
+    = Board1
+    | Board2
+
+
 type alias Model =
     { username : String
     , email : String
     , editing : Bool
     , gameStarted : Bool
     , gameEnded : Bool
+    , boardType : Maybe BoardType
     }
 
 
@@ -58,7 +64,7 @@ emailValidator =
 
 init : () -> ( Model, Cmd Msg )
 init flags =
-    ( Model "John" "" False False False, Cmd.none )
+    ( Model "Anonymous User" "" False False False Nothing, Cmd.none )
 
 
 type alias Document msg =
@@ -86,6 +92,7 @@ type Msg
     | UpdateEmail String -- Should be a custom type that validates email, right?
     | StartGame
     | QuitGame
+    | ChangeBoard (Maybe BoardType)
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -128,6 +135,9 @@ update msg model =
         QuitGame ->
             ( { model | gameStarted = False, gameEnded = True }, Cmd.none )
 
+        ChangeBoard newBoard ->
+            ( { model | boardType = newBoard }, Cmd.none )
+
 
 toggleForm : Model -> ( Model, Cmd Msg )
 toggleForm model =
@@ -140,7 +150,7 @@ toggleForm model =
 
 view : Model -> Browser.Document Msg
 view model =
-    { title = "Test page"
+    { title = "Abstract Board"
     , body =
         [ viewHeader model
         , viewMenu model
@@ -172,10 +182,7 @@ viewHeader model =
         , container []
             [ Bulma.Elements.title H1
                 []
-                [ text "App Title" ]
-            , p
-                []
-                [ text model.username ]
+                [ text "Abstract Board" ]
             ]
         ]
 
@@ -194,17 +201,43 @@ viewMenu model =
         [ navbarMenu False
             []
             [ navbarStart []
-                [ if model.editing then
-                    navbarItem False [ onClick EditForm ] [ text "Done Editing" ]
-
-                  else
-                    navbarItem True [ onClick EditForm ] [ text "Edit Profile" ]
-                , if model.gameStarted then
+                [ if model.gameStarted then
                     navbarItem False [ disableWhileEditing model QuitGame ] [ text "End Game" ]
 
                   else
                     navbarItem False [ disableWhileEditing model StartGame ] [ text "Start Game" ]
+                , if model.gameStarted then
+                    navbarItem False [ disabled True ] [ viewBoardType model ]
+
+                  else
+                    hoverableNavbarItemDropdown Down
+                        []
+                        (navbarLink
+                            [ onClick (ChangeBoard Nothing) ]
+                            [ viewBoardType model ]
+                        )
+                        [ navbarDropdown True
+                            Centered
+                            []
+                            [ navbarItem False
+                                [ onClick (ChangeBoard (Just Board1)) ]
+                                [ text "Board 1" ]
+                            , navbarItem False
+                                [ onClick (ChangeBoard (Just Board2)) ]
+                                [ text "Board 2" ]
+                            ]
+                        ]
                 ]
+            ]
+        , navbarEnd []
+            [ if model.editing then
+                navbarItem False [ onClick EditForm ] [ text "Done Editing" ]
+
+              else
+                hoverableNavbarItemDropdown Down
+                    []
+                    (navbarLink [] [ text model.username ])
+                    [ navbarDropdown True Centered [] [ navbarItem True [ onClick EditForm ] [ text "Edit Profile" ] ] ]
             ]
         ]
 
@@ -270,6 +303,19 @@ viewProfileEditForm model =
 viewHideProfileEditForm : Model -> Html Msg
 viewHideProfileEditForm model =
     container [] []
+
+
+viewBoardType : Model -> Html Msg
+viewBoardType model =
+    case model.boardType of
+        Just Board1 ->
+            text "Board One"
+
+        Just Board2 ->
+            text "Board Two"
+
+        Nothing ->
+            text "Choose Board"
 
 
 viewFooter : Model -> Html Msg
