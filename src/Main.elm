@@ -55,7 +55,7 @@ type alias Pieces =
 
 type alias Model =
     { pageTitle : String
-    , username : String
+    , username : Maybe String
     , editing : Bool
     , gameActive : Bool
     , gameEnded : Bool
@@ -64,14 +64,9 @@ type alias Model =
     }
 
 
-nameValidator : Validator String Model
-nameValidator =
-    Validate.ifBlank .username "Please enter a name "
-
-
 init : () -> ( Model, Cmd Msg )
 init flags =
-    ( Model "Abstract Board" "Anonymous User" False False False Nothing [ { id = 0, x = 25, y = 50, r = 5, color = Color.black, isMoving = False }, { id = 1, x = 50, y = 70, r = 10, color = Color.black, isMoving = False }, { id = 2, x = 100, y = 100, r = 20, color = Color.black, isMoving = False } ], Cmd.none )
+    ( Model "Abstract Board" Nothing False False False Nothing [ { id = 0, x = 25, y = 50, r = 5, color = Color.black, isMoving = False }, { id = 1, x = 50, y = 70, r = 10, color = Color.black, isMoving = False }, { id = 2, x = 100, y = 100, r = 20, color = Color.black, isMoving = False } ], Cmd.none )
 
 
 
@@ -102,19 +97,19 @@ update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
         EditForm ->
-            case Validate.validate nameValidator model of
-                Ok notBlankName ->
-                    toggleForm model
-
-                Err validationErrors ->
-                    if model.editing then
-                        ( model, Cmd.none )
+            case model.username of
+                Just string ->
+                    if string == "" then
+                        ( { model | username = Nothing }, Cmd.none )
 
                     else
                         toggleForm model
 
+                Nothing ->
+                    toggleForm model
+
         UpdateName newName ->
-            ( { model | username = newName }, Cmd.none )
+            ( { model | username = Just newName }, Cmd.none )
 
         StartGame ->
             if model.boardType == Nothing then
@@ -181,8 +176,8 @@ togglePieceColor piece =
 
 
 movePiece : Pieces -> ( Float, Float ) -> Pieces
-movePiece piece ( x, y ) =
-    { piece | x = x, y = y }
+movePiece piece ( newX, newY ) =
+    { piece | x = newX, y = newY }
 
 
 moveSelectedPiece : ( Float, Float ) -> Model -> ( Model, Cmd Msg )
@@ -365,7 +360,7 @@ viewMenu model =
               else
                 hoverableNavbarItemDropdown Down
                     []
-                    (navbarLink [] [ text model.username ])
+                    (navbarLink [] [ text (getUsername model) ])
                     [ navbarDropdown True Centered [] [ navbarItem True [ onClick EditForm ] [ text "Edit Profile" ] ] ]
             ]
         ]
@@ -401,17 +396,21 @@ viewProfileEditForm : Model -> Control Msg
 viewProfileEditForm model =
     container []
         [ container []
-            [ case Validate.validate nameValidator model of
-                Ok validName ->
-                    text ""
+            [ case model.username of
+                Just string ->
+                    if string == "" then
+                        container [] [ box [ style "color" "red" ] [ text "Username is blank - you'll be Anonymous" ] ]
 
-                Err validationErrors ->
-                    container [] [ box [ style "color" "red" ] [ text (List.take 1 validationErrors |> String.concat) ] ]
+                    else
+                        text ""
+
+                Nothing ->
+                    container [] [ box [ style "color" "red" ] [ text "Username is blank - you'll be Anonymous" ] ]
             ]
         , fieldBody []
             [ field []
                 [ controlLabel [ for "username" ] [ text "Username" ]
-                , controlInput inputModifier [] [ id "username", value model.username, onInput UpdateName ] [ text model.username ]
+                , controlInput inputModifier [] [ id "username", value (getUsername model), onInput UpdateName ] [ text (getUsername model) ]
                 , controlHelp Default [] []
                 ]
             ]
@@ -471,7 +470,7 @@ currentCanvas model width height =
 welcomeCanvas : Model -> Int -> Int -> List Canvas.Renderable
 welcomeCanvas model width height =
     [ shapes [ fill Color.black ] [ rect ( 0, 0 ) (toFloat width) (toFloat height) ]
-    , renderName model width height
+    , renderGreeting (getUsername model) model.gameEnded width height
     ]
 
 
@@ -480,29 +479,39 @@ gameCanvas model width height =
     -- make it white
     -- write boardType on the canvas
     [ shapes [ fill Color.white ] [ rect ( 0, 0 ) (toFloat width) (toFloat height) ]
-    , renderBoard model width height
+    , renderBoard model.boardType width height
     ]
-        ++ List.concat (renderPieces model)
+        ++ List.concat (renderPieces model.pieces)
 
 
-renderName : Model -> Int -> Int -> Canvas.Renderable
-renderName model width height =
+getUsername : Model -> String
+getUsername model =
+    case model.username of
+        Just username ->
+            username
+
+        Nothing ->
+            "Anonymous"
+
+
+renderGreeting : String -> Bool -> Int -> Int -> Canvas.Renderable
+renderGreeting username gameEnded width height =
     let
         greeting =
-            if model.gameEnded then
-                "Play again, " ++ model.username ++ "?"
+            if gameEnded then
+                "Play again, " ++ username ++ "?"
 
             else
-                "Welcome " ++ model.username ++ "!"
+                "Welcome " ++ username ++ "!"
     in
     Canvas.text [ Canvas.font { size = 24, family = "serif" }, fill Color.white, Canvas.align Canvas.Center ] ( toFloat width / 2, toFloat height / 2 ) greeting
 
 
-renderBoard : Model -> Int -> Int -> Canvas.Renderable
-renderBoard model width height =
+renderBoard : Maybe BoardType -> Int -> Int -> Canvas.Renderable
+renderBoard boardType width height =
     let
         board =
-            case model.boardType of
+            case boardType of
                 Just Board1 ->
                     "Board One"
 
@@ -518,12 +527,12 @@ renderBoard model width height =
     Canvas.text [ Canvas.font { size = 24, family = "serif" }, fill Color.black, Canvas.align Canvas.Center ] ( toFloat width / 2, toFloat height / 2 ) board
 
 
-renderPieces : Model -> List (List Canvas.Renderable)
-renderPieces model =
+renderPieces : List Pieces -> List (List Canvas.Renderable)
+renderPieces pieces =
     List.map
         (\p ->
             [ Canvas.shapes [ fill p.color ] [ Canvas.circle ( p.x, p.y ) p.r ]
-            , Canvas.text [ Canvas.font { size = 14, family = "serif" }, fill Color.black, Canvas.align Canvas.Right ] ( p.x + 10, p.y + 10 + p.r * 2 ) (String.fromFloat p.x ++ ", " ++ String.fromFloat p.y)
+            , Canvas.text [ Canvas.font { size = 14, family = "serif" }, fill Color.black, Canvas.align Canvas.Center ] ( p.x, p.y + 10 + p.r * 2 ) (String.fromFloat p.x ++ ", " ++ String.fromFloat p.y)
             ]
         )
-        model.pieces
+        pieces
