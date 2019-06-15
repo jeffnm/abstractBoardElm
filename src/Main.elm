@@ -14,7 +14,7 @@ import Bulma.Modifiers exposing (..)
 import Canvas exposing (fill, rect, shapes)
 import Color
 import Css
-import Html exposing (Html, main_, p, text)
+import Html exposing (Html, main_, p, span, text)
 import Html.Attributes exposing (..)
 import Html.Events exposing (onClick, onInput)
 import Html.Events.Extra.Pointer as Pointer
@@ -56,17 +56,22 @@ type alias Pieces =
 type alias Model =
     { pageTitle : String
     , username : Maybe String
-    , editing : Bool
-    , gameActive : Bool
-    , gameEnded : Bool
+    , formProfileIsOpen : Bool
+    , formPieceIsOpen : Bool
+    , formPieceSizeSelectedOption : String
+    , pieceSizeOptions : List String
+    , pieceColorChoice : String
+    , gameIsActive : Bool
+    , gameHasEnded : Bool
     , boardType : Maybe BoardType
     , pieces : List Pieces
+    , pointer : ( Float, Float )
     }
 
 
 init : () -> ( Model, Cmd Msg )
 init flags =
-    ( Model "Abstract Board" Nothing False False False Nothing [ { id = 0, x = 25, y = 50, r = 5, color = Color.black, isMoving = False }, { id = 1, x = 50, y = 70, r = 10, color = Color.black, isMoving = False }, { id = 2, x = 100, y = 100, r = 20, color = Color.black, isMoving = False } ], Cmd.none )
+    ( Model "Abstract Board" Nothing False False "small" [ "small", "medium", "large" ] "black" False False Nothing [] ( 0, 0 ), Cmd.none )
 
 
 
@@ -83,11 +88,15 @@ subscriptions _ =
 
 
 type Msg
-    = EditForm
+    = FormEditProfile
     | UpdateName String
     | StartGame
     | QuitGame
     | ChangeBoard (Maybe BoardType)
+    | FormAddPiece
+    | FormUpdatePieceSizeChoice String
+    | FormUpdatePieceColorChoice String
+    | CreatePiece
     | CanvasPointerDown ( Float, Float )
     | CanvasPointerUp ( Float, Float )
     | CanvasPointerMove ( Float, Float )
@@ -96,58 +105,114 @@ type Msg
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
-        EditForm ->
+        FormEditProfile ->
             case model.username of
                 Just string ->
                     if string == "" then
                         ( { model | username = Nothing }, Cmd.none )
 
                     else
-                        toggleForm model
+                        toggleFormProfile model
 
                 Nothing ->
-                    toggleForm model
+                    toggleFormProfile model
+
+        FormUpdatePieceSizeChoice string ->
+            case string of
+                "small" ->
+                    ( { model | formPieceSizeSelectedOption = string }, Cmd.none )
+
+                "medium" ->
+                    ( { model | formPieceSizeSelectedOption = string }, Cmd.none )
+
+                "large" ->
+                    ( { model | formPieceSizeSelectedOption = string }, Cmd.none )
+
+                _ ->
+                    ( { model | formPieceSizeSelectedOption = "small" }, Cmd.none )
+
+        FormUpdatePieceColorChoice color ->
+            ( { model | pieceColorChoice = color }, Cmd.none )
 
         UpdateName newName ->
             ( { model | username = Just newName }, Cmd.none )
 
+        CreatePiece ->
+            createPiece model
+
         StartGame ->
             if model.boardType == Nothing then
-                ( { model | gameActive = False }, Cmd.none )
+                ( { model | gameIsActive = False }, Cmd.none )
                 -- Cmd should tell view there is an error
 
             else
-                ( { model | gameActive = True }, Cmd.none )
+                ( { model | gameIsActive = True }, Cmd.none )
 
         QuitGame ->
-            ( { model | gameActive = False, gameEnded = True }, Cmd.none )
+            ( { model | gameIsActive = False, gameHasEnded = True, pieces = [], formPieceIsOpen = False }, Cmd.none )
 
         ChangeBoard newBoard ->
             ( { model | boardType = newBoard }, Cmd.none )
 
+        FormAddPiece ->
+            ( { model | formPieceIsOpen = True }, Cmd.none )
+
         CanvasPointerDown event ->
-            -- Examples
-            --( { model | username = String.fromFloat (Tuple.first event) ++ "  " ++ String.fromFloat (Tuple.second event) }, Cmd.none )
-            --( { model | pieces = List.map (\p -> { x = p.x + 1, y = p.y + 1, r = p.r }) model.pieces }, Cmd.none )
             -- Function to take the event and model and return a model
             selectPiece event model
 
         CanvasPointerUp event ->
-            -- Example
-            --( { model | username = String.fromFloat (Tuple.first event) ++ "  " ++ String.fromFloat (Tuple.second event) }, Cmd.none )
             deselectPiece event model
 
         CanvasPointerMove event ->
             moveSelectedPiece event model
 
 
-toggleForm : Model -> ( Model, Cmd Msg )
-toggleForm model =
-    ( { model | editing = not model.editing }, Cmd.none )
+
+-- ( { model | pointer = event }, Cmd.none )
 
 
-updatePiece : Model -> Pieces -> ( Model, Cmd Msg )
-updatePiece model piece =
+createPiece : Model -> ( Model, Cmd Msg )
+createPiece model =
+    let
+        id =
+            List.length model.pieces - 1
+
+        size =
+            case model.formPieceSizeSelectedOption of
+                "medium" ->
+                    10
+
+                "large" ->
+                    15
+
+                _ ->
+                    5
+
+        color =
+            case model.pieceColorChoice of
+                "white" ->
+                    Color.white
+
+                _ ->
+                    Color.black
+
+        piece =
+            Pieces id 500 500 size color False
+
+        pieces =
+            List.append model.pieces [ piece ]
+    in
+    ( { model | pieces = pieces }, Cmd.none )
+
+
+toggleFormProfile : Model -> ( Model, Cmd Msg )
+toggleFormProfile model =
+    ( { model | formProfileIsOpen = not model.formProfileIsOpen }, Cmd.none )
+
+
+updatePiece : Model -> Pieces -> ( Float, Float ) -> ( Model, Cmd Msg )
+updatePiece model piece event =
     let
         pieces =
             List.map
@@ -160,7 +225,7 @@ updatePiece model piece =
                 )
                 model.pieces
     in
-    ( { model | pieces = pieces }, Cmd.none )
+    ( { model | pieces = pieces, pointer = event }, Cmd.none )
 
 
 togglePieceColor : Pieces -> Pieces
@@ -198,11 +263,11 @@ moveSelectedPiece event model =
     in
     case selectedPiece of
         Just a ->
-            updatePiece model (movePiece a event)
+            updatePiece model (movePiece a model.pointer) event
 
         --updatePiece model (togglePieceColor { a | isMoving = True })
         Nothing ->
-            ( model, Cmd.none )
+            ( { model | pointer = event }, Cmd.none )
 
 
 deselectPiece : ( Float, Float ) -> Model -> ( Model, Cmd Msg )
@@ -226,7 +291,7 @@ deselectPiece event model =
             --else if a.isMoving then
             --    updatePiece model (movePiece a event)
             --else
-            updatePiece model (togglePieceColor { a | isMoving = False })
+            updatePiece model (togglePieceColor { a | isMoving = False }) event
 
         Nothing ->
             ( model, Cmd.none )
@@ -262,7 +327,7 @@ selectPiece event model =
     case selectedPiece of
         Just a ->
             --updatePiece model (movePiece a event)
-            updatePiece model (togglePieceColor { a | isMoving = True })
+            updatePiece model (togglePieceColor { a | isMoving = True }) event
 
         Nothing ->
             ( model, Cmd.none )
@@ -322,15 +387,16 @@ viewMenu : Model -> Html Msg
 viewMenu model =
     navbar { color = Dark, transparent = False }
         []
-        [ navbarMenu False
+        [ navbarBrand [] (navbarBurger False [] [ span [] [], span [] [], span [] [] ]) []
+        , navbarMenu True
             []
             [ navbarStart []
-                [ if model.gameActive then
+                [ if model.gameIsActive then
                     navbarItem False [ disableWhileEditing model QuitGame ] [ text "End Game" ]
 
                   else
                     navbarItem False [ disableWhileEditing model StartGame ] [ text "Start Game" ]
-                , if model.gameActive then
+                , if model.gameIsActive then
                     navbarItem False [ disabled True ] [ viewBoardType model ]
 
                   else
@@ -351,24 +417,29 @@ viewMenu model =
                                 [ text "Board 2" ]
                             ]
                         ]
+                , if model.gameIsActive then
+                    navbarItem False [ onClick FormAddPiece ] [ text "Add Piece" ]
+
+                  else
+                    navbarItem False [ disabled True ] [ text "Add Piece" ]
                 ]
             ]
         , navbarEnd []
-            [ if model.editing then
-                navbarItem False [ onClick EditForm ] [ text "Done Editing" ]
+            [ if model.formProfileIsOpen then
+                navbarItem False [ onClick FormEditProfile ] [ text "Done Editing" ]
 
               else
                 hoverableNavbarItemDropdown Down
                     []
                     (navbarLink [] [ text (getUsername model) ])
-                    [ navbarDropdown True Centered [] [ navbarItem True [ onClick EditForm ] [ text "Edit Profile" ] ] ]
+                    [ navbarDropdown True Centered [] [ navbarItem True [ onClick FormEditProfile ] [ text "Edit Profile" ] ] ]
             ]
         ]
 
 
 disableWhileEditing : Model -> Msg -> Html.Attribute Msg
 disableWhileEditing model msg =
-    if not model.editing then
+    if not model.formProfileIsOpen then
         onClick msg
 
     else
@@ -379,23 +450,24 @@ viewBody : Model -> Html Msg
 viewBody model =
     container
         []
-        [ if model.editing then
+        [ if model.formProfileIsOpen then
             viewProfileEditForm model
 
           else
-            viewHideProfileEditForm model
+            viewEmptyContainer
+        , if model.formPieceIsOpen then
+            viewNewPieceForm model
+
+          else
+            viewEmptyContainer
         , container [ style "display" "flex", style "justify-content" "center", style "align-items" "center" ] [ viewCanvas model ]
         ]
-
-
-
---validateProfileForm : Model -> Control Msg
 
 
 viewProfileEditForm : Model -> Control Msg
 viewProfileEditForm model =
     container []
-        [ container []
+        [ container [ class "validation-messages" ]
             [ case model.username of
                 Just string ->
                     if string == "" then
@@ -417,8 +489,66 @@ viewProfileEditForm model =
         ]
 
 
-viewHideProfileEditForm : Model -> Html Msg
-viewHideProfileEditForm model =
+viewNewPieceFormSizeOptions : Model -> List (Html Msg)
+viewNewPieceFormSizeOptions model =
+    let
+        options =
+            model.pieceSizeOptions
+    in
+    List.map
+        (\o ->
+            if model.formPieceSizeSelectedOption == o then
+                Html.option [ value o, selected True ] [ text o ]
+
+            else
+                Html.option [ value o ] [ text o ]
+        )
+        options
+
+
+viewNewPieceForm : Model -> Html Msg
+viewNewPieceForm model =
+    container []
+        [ container [ class "validation-messages" ]
+            []
+        , fieldBody
+            [ id "add-piece-form" ]
+            [ field [ class "is-narrow" ] [ controlSelect controlSelectModifiers [ id "size" ] [ class "piece-size-select", onInput FormUpdatePieceSizeChoice ] (viewNewPieceFormSizeOptions model) ]
+            , field [ class "is-narrow" ]
+                [ controlSelect controlSelectModifiers
+                    [ id "color" ]
+                    [ class "piece-size-select", onInput FormUpdatePieceColorChoice ]
+                    [ Html.option
+                        [ value "white"
+                        , if model.pieceColorChoice == "white" then
+                            selected True
+
+                          else
+                            selected
+                                False
+                        ]
+                        [ text "white" ]
+                    , Html.option
+                        [ value "black"
+                        , if model.pieceColorChoice == "black" then
+                            selected True
+
+                          else
+                            selected
+                                False
+                        ]
+                        [ text "black" ]
+                    ]
+                ]
+            , field [ class "is-narrow" ]
+                [ controlButton buttonModifiers [ id "create-piece" ] [ onClick CreatePiece ] [ text "Create Piece" ]
+                ]
+            ]
+        ]
+
+
+viewEmptyContainer : Html Msg
+viewEmptyContainer =
     container [] []
 
 
@@ -454,23 +584,29 @@ viewCanvas model =
             600
     in
     Canvas.toHtml ( width, height )
-        [ Pointer.onDown (\event -> CanvasPointerDown event.pointer.offsetPos), Pointer.onUp (\event -> CanvasPointerUp event.pointer.offsetPos), Pointer.onMove (\event -> CanvasPointerMove event.pointer.offsetPos), style "border" "10px solid green", style "width" (String.fromInt width ++ "px"), style "height" (String.fromInt height ++ "px") ]
+        [ Pointer.onDown (\event -> CanvasPointerDown event.pointer.offsetPos), Pointer.onUp (\event -> CanvasPointerUp event.pointer.offsetPos), Pointer.onMove (\event -> CanvasPointerMove event.pointer.offsetPos), style "width" (String.fromInt width ++ "px"), style "height" (String.fromInt height ++ "px") ]
         (currentCanvas model width height)
 
 
 currentCanvas : Model -> Int -> Int -> List Canvas.Renderable
 currentCanvas model width height =
-    if model.gameActive then
+    if model.gameIsActive then
         gameCanvas model width height
 
     else
         welcomeCanvas model width height
 
 
+debugMousePointer : ( Float, Float ) -> Int -> Int -> Canvas.Renderable
+debugMousePointer event width height =
+    Canvas.text [ Canvas.font { size = 24, family = "serif" }, Canvas.fill Color.white, Canvas.stroke Color.black, Canvas.align Canvas.Center ] ( toFloat width - 100, toFloat height - 500 ) (String.fromFloat (Tuple.first event) ++ ", " ++ String.fromFloat (Tuple.second event))
+
+
 welcomeCanvas : Model -> Int -> Int -> List Canvas.Renderable
 welcomeCanvas model width height =
     [ shapes [ fill Color.black ] [ rect ( 0, 0 ) (toFloat width) (toFloat height) ]
-    , renderGreeting (getUsername model) model.gameEnded width height
+    , renderGreeting (getUsername model) model.gameHasEnded width height
+    , debugMousePointer model.pointer width height
     ]
 
 
@@ -480,6 +616,7 @@ gameCanvas model width height =
     -- write boardType on the canvas
     [ shapes [ fill Color.white ] [ rect ( 0, 0 ) (toFloat width) (toFloat height) ]
     , renderBoard model.boardType width height
+    , debugMousePointer model.pointer width height
     ]
         ++ List.concat (renderPieces model.pieces)
 
@@ -495,10 +632,10 @@ getUsername model =
 
 
 renderGreeting : String -> Bool -> Int -> Int -> Canvas.Renderable
-renderGreeting username gameEnded width height =
+renderGreeting username gameHasEnded width height =
     let
         greeting =
-            if gameEnded then
+            if gameHasEnded then
                 "Play again, " ++ username ++ "?"
 
             else
