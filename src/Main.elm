@@ -1,8 +1,5 @@
 module Main exposing (main)
 
---import Html exposing (..)
---post bulema Html
-
 import Browser
 import Bulma.CDN exposing (..)
 import Bulma.Columns exposing (..)
@@ -11,7 +8,7 @@ import Bulma.Elements exposing (..)
 import Bulma.Form exposing (..)
 import Bulma.Layout exposing (..)
 import Bulma.Modifiers exposing (..)
-import Canvas exposing (fill, rect, shapes)
+import Canvas exposing (fill, lineTo, path, rect, shapes)
 import Color
 import Css
 import Html exposing (Html, main_, p, span, text)
@@ -38,6 +35,22 @@ main =
 -- MODEL
 
 
+type alias Model =
+    { pageTitle : String
+    , username : Maybe String
+    , formProfileIsOpen : Bool
+    , formPieceIsOpen : Bool
+    , formPieceSizeSelectedOption : String
+    , formPieceSizeOptions : List String
+    , formPieceColorChoice : String
+    , gameIsActive : Bool
+    , gameHasEnded : Bool
+    , boardType : Maybe BoardType
+    , pieces : List Pieces
+    , pointer : ( Float, Float )
+    }
+
+
 type BoardType
     = Board1
     | Board2
@@ -48,30 +61,34 @@ type alias Pieces =
     , x : Float
     , y : Float
     , r : Float
-    , color : Color.Color
+    , baseColor : Color.Color
+    , displayColor : Color.Color
     , isMoving : Bool
     }
 
 
-type alias Model =
-    { pageTitle : String
-    , username : Maybe String
-    , formProfileIsOpen : Bool
-    , formPieceIsOpen : Bool
-    , formPieceSizeSelectedOption : String
-    , pieceSizeOptions : List String
-    , pieceColorChoice : String
-    , gameIsActive : Bool
-    , gameHasEnded : Bool
-    , boardType : Maybe BoardType
-    , pieces : List Pieces
-    , pointer : ( Float, Float )
-    }
+type Form
+    = ProfileForm
+    | AddPieceForm
 
 
 init : () -> ( Model, Cmd Msg )
 init flags =
-    ( Model "Abstract Board" Nothing False False "small" [ "small", "medium", "large" ] "black" False False Nothing [] ( 0, 0 ), Cmd.none )
+    ( { pageTitle = "Abstract Board"
+      , username = Nothing
+      , formProfileIsOpen = False
+      , formPieceIsOpen = False
+      , formPieceSizeSelectedOption = "medium"
+      , formPieceSizeOptions = [ "small", "medium", "large" ]
+      , formPieceColorChoice = "black"
+      , gameIsActive = False
+      , gameHasEnded = False
+      , boardType = Nothing
+      , pieces = []
+      , pointer = ( 0, 0 )
+      }
+    , Cmd.none
+    )
 
 
 
@@ -90,13 +107,13 @@ subscriptions _ =
 type Msg
     = FormEditProfile
     | UpdateName String
-    | StartGame
+    | StartedGame
     | QuitGame
-    | ChangeBoard (Maybe BoardType)
+    | ChangedBoard (Maybe BoardType)
     | FormAddPiece
     | FormUpdatePieceSizeChoice String
     | FormUpdatePieceColorChoice String
-    | CreatePiece
+    | CreatedPiece
     | CanvasPointerDown ( Float, Float )
     | CanvasPointerUp ( Float, Float )
     | CanvasPointerMove ( Float, Float )
@@ -112,10 +129,13 @@ update msg model =
                         ( { model | username = Nothing }, Cmd.none )
 
                     else
-                        toggleFormProfile model
+                        toggleForm ProfileForm model
 
                 Nothing ->
-                    toggleFormProfile model
+                    toggleForm ProfileForm model
+
+        FormAddPiece ->
+            toggleForm AddPieceForm model
 
         FormUpdatePieceSizeChoice string ->
             case string of
@@ -132,18 +152,18 @@ update msg model =
                     ( { model | formPieceSizeSelectedOption = "small" }, Cmd.none )
 
         FormUpdatePieceColorChoice color ->
-            ( { model | pieceColorChoice = color }, Cmd.none )
+            ( { model | formPieceColorChoice = color }, Cmd.none )
 
         UpdateName newName ->
             ( { model | username = Just newName }, Cmd.none )
 
-        CreatePiece ->
+        CreatedPiece ->
             createPiece model
 
-        StartGame ->
+        StartedGame ->
             if model.boardType == Nothing then
                 ( { model | gameIsActive = False }, Cmd.none )
-                -- Cmd should tell view there is an error
+                -- Should Cmd tell view there is an error? Or is that a model update?
 
             else
                 ( { model | gameIsActive = True }, Cmd.none )
@@ -151,11 +171,8 @@ update msg model =
         QuitGame ->
             ( { model | gameIsActive = False, gameHasEnded = True, pieces = [], formPieceIsOpen = False }, Cmd.none )
 
-        ChangeBoard newBoard ->
+        ChangedBoard newBoard ->
             ( { model | boardType = newBoard }, Cmd.none )
-
-        FormAddPiece ->
-            ( { model | formPieceIsOpen = True }, Cmd.none )
 
         CanvasPointerDown event ->
             -- Function to take the event and model and return a model
@@ -181,16 +198,16 @@ createPiece model =
         size =
             case model.formPieceSizeSelectedOption of
                 "medium" ->
-                    10
+                    25
 
                 "large" ->
-                    15
+                    35
 
                 _ ->
-                    5
+                    15
 
         color =
-            case model.pieceColorChoice of
+            case model.formPieceColorChoice of
                 "white" ->
                     Color.white
 
@@ -198,7 +215,7 @@ createPiece model =
                     Color.black
 
         piece =
-            Pieces id 500 500 size color False
+            Pieces id 500 500 size color color False
 
         pieces =
             List.append model.pieces [ piece ]
@@ -206,9 +223,14 @@ createPiece model =
     ( { model | pieces = pieces }, Cmd.none )
 
 
-toggleFormProfile : Model -> ( Model, Cmd Msg )
-toggleFormProfile model =
-    ( { model | formProfileIsOpen = not model.formProfileIsOpen }, Cmd.none )
+toggleForm : Form -> Model -> ( Model, Cmd Msg )
+toggleForm form model =
+    case form of
+        ProfileForm ->
+            ( { model | formProfileIsOpen = not model.formProfileIsOpen }, Cmd.none )
+
+        AddPieceForm ->
+            ( { model | formPieceIsOpen = not model.formPieceIsOpen }, Cmd.none )
 
 
 updatePiece : Model -> Pieces -> ( Float, Float ) -> ( Model, Cmd Msg )
@@ -228,16 +250,22 @@ updatePiece model piece event =
     ( { model | pieces = pieces, pointer = event }, Cmd.none )
 
 
-togglePieceColor : Pieces -> Pieces
-togglePieceColor piece =
-    if piece.color == Color.black then
-        { piece | color = Color.gray }
+togglePieceDisplayColor : Pieces -> Pieces
+togglePieceDisplayColor piece =
+    if piece.baseColor == Color.black && piece.displayColor == Color.black then
+        { piece | displayColor = Color.grey }
 
-    else if piece.color == Color.gray then
-        { piece | color = Color.black }
+    else if piece.baseColor == Color.black && piece.displayColor == Color.grey then
+        { piece | displayColor = Color.black }
+
+    else if piece.baseColor == Color.white && piece.displayColor == Color.white then
+        { piece | displayColor = Color.grey }
+
+    else if piece.baseColor == Color.white && piece.displayColor == Color.grey then
+        { piece | displayColor = Color.white }
 
     else
-        { piece | color = Color.black }
+        { piece | displayColor = Color.black }
 
 
 movePiece : Pieces -> ( Float, Float ) -> Pieces
@@ -291,7 +319,7 @@ deselectPiece event model =
             --else if a.isMoving then
             --    updatePiece model (movePiece a event)
             --else
-            updatePiece model (togglePieceColor { a | isMoving = False }) event
+            updatePiece model (togglePieceDisplayColor { a | isMoving = False }) event
 
         Nothing ->
             ( model, Cmd.none )
@@ -327,7 +355,7 @@ selectPiece event model =
     case selectedPiece of
         Just a ->
             --updatePiece model (movePiece a event)
-            updatePiece model (togglePieceColor { a | isMoving = True }) event
+            updatePiece model (togglePieceDisplayColor { a | isMoving = True }) event
 
         Nothing ->
             ( model, Cmd.none )
@@ -395,7 +423,7 @@ viewMenu model =
                     navbarItem False [ disableWhileEditing model QuitGame ] [ text "End Game" ]
 
                   else
-                    navbarItem False [ disableWhileEditing model StartGame ] [ text "Start Game" ]
+                    navbarItem False [ disableWhileEditing model StartedGame ] [ text "Start Game" ]
                 , if model.gameIsActive then
                     navbarItem False [ disabled True ] [ viewBoardType model ]
 
@@ -403,25 +431,31 @@ viewMenu model =
                     hoverableNavbarItemDropdown Down
                         []
                         (navbarLink
-                            [ onClick (ChangeBoard Nothing) ]
+                            [ onClick (ChangedBoard Nothing) ]
                             [ viewBoardType model ]
                         )
                         [ navbarDropdown True
                             Centered
                             []
                             [ navbarItem False
-                                [ onClick (ChangeBoard (Just Board1)) ]
+                                [ onClick (ChangedBoard (Just Board1)) ]
                                 [ text "Board 1" ]
                             , navbarItem False
-                                [ onClick (ChangeBoard (Just Board2)) ]
+                                [ onClick (ChangedBoard (Just Board2)) ]
                                 [ text "Board 2" ]
                             ]
                         ]
-                , if model.gameIsActive then
-                    navbarItem False [ onClick FormAddPiece ] [ text "Add Piece" ]
+                , case model.gameIsActive of
+                    True ->
+                        case model.formPieceIsOpen of
+                            True ->
+                                navbarItem True [ onClick FormAddPiece ] [ text "Close Pieces Form" ]
 
-                  else
-                    navbarItem False [ disabled True ] [ text "Add Piece" ]
+                            False ->
+                                navbarItem False [ onClick FormAddPiece ] [ text "Create Pieces" ]
+
+                    False ->
+                        navbarItem False [ disabled True ] [ text "" ]
                 ]
             ]
         , navbarEnd []
@@ -493,7 +527,7 @@ viewNewPieceFormSizeOptions : Model -> List (Html Msg)
 viewNewPieceFormSizeOptions model =
     let
         options =
-            model.pieceSizeOptions
+            model.formPieceSizeOptions
     in
     List.map
         (\o ->
@@ -520,7 +554,7 @@ viewNewPieceForm model =
                     [ class "piece-size-select", onInput FormUpdatePieceColorChoice ]
                     [ Html.option
                         [ value "white"
-                        , if model.pieceColorChoice == "white" then
+                        , if model.formPieceColorChoice == "white" then
                             selected True
 
                           else
@@ -530,7 +564,7 @@ viewNewPieceForm model =
                         [ text "white" ]
                     , Html.option
                         [ value "black"
-                        , if model.pieceColorChoice == "black" then
+                        , if model.formPieceColorChoice == "black" then
                             selected True
 
                           else
@@ -541,7 +575,7 @@ viewNewPieceForm model =
                     ]
                 ]
             , field [ class "is-narrow" ]
-                [ controlButton buttonModifiers [ id "create-piece" ] [ onClick CreatePiece ] [ text "Create Piece" ]
+                [ controlButton buttonModifiers [ id "create-piece" ] [ onClick CreatedPiece ] [ text "Create Piece" ]
                 ]
             ]
         ]
@@ -606,7 +640,8 @@ welcomeCanvas : Model -> Int -> Int -> List Canvas.Renderable
 welcomeCanvas model width height =
     [ shapes [ fill Color.black ] [ rect ( 0, 0 ) (toFloat width) (toFloat height) ]
     , renderGreeting (getUsername model) model.gameHasEnded width height
-    , debugMousePointer model.pointer width height
+
+    -- , debugMousePointer model.pointer width height
     ]
 
 
@@ -615,10 +650,146 @@ gameCanvas model width height =
     -- make it white
     -- write boardType on the canvas
     [ shapes [ fill Color.white ] [ rect ( 0, 0 ) (toFloat width) (toFloat height) ]
-    , renderBoard model.boardType width height
-    , debugMousePointer model.pointer width height
     ]
+        ++ renderBoard model.boardType width height
         ++ List.concat (renderPieces model.pieces)
+
+
+
+-- ++ [ debugMousePointer model.pointer width height ]
+-- Game Boards
+
+
+drawTriangle1 : ( Float, Float, Float ) -> Canvas.Shape
+drawTriangle1 ( x, y, length ) =
+    let
+        l =
+            length
+    in
+    path ( x, y ) [ lineTo ( x + l, y ), lineTo ( x + l / 2, y + l ), lineTo ( x, y ) ]
+
+
+drawTriangle2 : ( Float, Float, Float ) -> Canvas.Shape
+drawTriangle2 ( x, y, length ) =
+    let
+        l =
+            length
+    in
+    path ( x, y ) [ lineTo ( x + l, y ), lineTo ( x + l / 2, y - l ), lineTo ( x, y ) ]
+
+
+gameBoardOne : Int -> Int -> List Canvas.Renderable
+gameBoardOne width height =
+    let
+        tSize =
+            50
+
+        offset =
+            tSize * 1.5
+
+        hcount =
+            round ((toFloat width / tSize) * 1.25)
+
+        vcount =
+            round (toFloat height / tSize)
+
+        columns =
+            List.repeat
+                hcount
+                (negate
+                    2
+                    * tSize
+                )
+
+        rows =
+            List.repeat
+                vcount
+                0
+
+        drawrow y row =
+            List.indexedMap
+                (\i n ->
+                    if modBy 2 row == 0 then
+                        ( toFloat (n + i * tSize), y, tSize )
+
+                    else
+                        ( (toFloat n + toFloat i * tSize) + offset, y, tSize )
+                 -- ( toFloat (n + i * tSize)
+                 -- , y
+                 -- , tSize
+                 -- )
+                )
+                columns
+
+        triangles =
+            List.concat (List.indexedMap (\i n -> drawrow (toFloat (n + (i * tSize))) i) rows)
+
+        -- [ ( 50, y, tSize ), ( 100, y, tSize ), ( 150, y, tSize ), ( 200, y, tSize ) ]
+    in
+    [ shapes [ fill Color.white, Canvas.stroke Color.black ]
+        (List.map
+            drawTriangle1
+            triangles
+         -- ++ List.map drawTriangle2 triangles
+        )
+    ]
+
+
+gameBoardTwo : Int -> Int -> List Canvas.Renderable
+gameBoardTwo width height =
+    let
+        tSize =
+            200
+
+        offset =
+            tSize * 1.5
+
+        hcount =
+            round ((toFloat width / tSize) * 2)
+
+        vcount =
+            round (toFloat height / tSize)
+
+        columns =
+            List.repeat
+                hcount
+                (negate
+                    2
+                    * tSize
+                )
+
+        rows =
+            List.repeat
+                vcount
+                0
+
+        drawrow y row =
+            List.indexedMap
+                (\i n ->
+                    if modBy 2 row == 0 then
+                        ( toFloat (n + i * tSize), y, tSize )
+
+                    else
+                        ( (toFloat n + toFloat i * tSize) + offset, y, tSize )
+                 -- ( toFloat (n + i * tSize)
+                 -- , y
+                 -- , tSize
+                 -- )
+                )
+                columns
+
+        triangles =
+            List.concat (List.indexedMap (\i n -> drawrow (toFloat (n + (i * tSize))) i) rows)
+
+        -- [ ( 50, y, tSize ), ( 100, y, tSize ), ( 150, y, tSize ), ( 200, y, tSize ) ]
+    in
+    [ shapes [ fill Color.white, Canvas.stroke Color.black ]
+        (List.map
+            drawTriangle1
+            triangles
+         -- ++ List.map drawTriangle2 triangles
+        )
+    ]
 
 
 getUsername : Model -> String
@@ -644,32 +815,27 @@ renderGreeting username gameHasEnded width height =
     Canvas.text [ Canvas.font { size = 24, family = "serif" }, fill Color.white, Canvas.align Canvas.Center ] ( toFloat width / 2, toFloat height / 2 ) greeting
 
 
-renderBoard : Maybe BoardType -> Int -> Int -> Canvas.Renderable
+renderBoard : Maybe BoardType -> Int -> Int -> List Canvas.Renderable
 renderBoard boardType width height =
-    let
-        board =
-            case boardType of
-                Just Board1 ->
-                    "Board One"
+    case boardType of
+        Just Board1 ->
+            gameBoardOne width height
 
-                Just Board2 ->
-                    "Board Two"
+        Just Board2 ->
+            gameBoardTwo width height
 
-                Nothing ->
-                    "Error! No Board Selected. We shouldn't have let you get here..."
-    in
-    -- Placeholder for actual board canvas drawing
-    --Debug.log ("debug 507: " ++ String.fromInt width)
-    --Canvas.text [ Canvas.font { size = 24, family = "serif" }, fill Color.black, Canvas.align Canvas.Center ] ( toFloat width / 2, toFloat height / 2 ) (String.fromInt width)
-    Canvas.text [ Canvas.font { size = 24, family = "serif" }, fill Color.black, Canvas.align Canvas.Center ] ( toFloat width / 2, toFloat height / 2 ) board
+        Nothing ->
+            -- default to game board one if this unwante state occurs
+            gameBoardOne width height
 
 
 renderPieces : List Pieces -> List (List Canvas.Renderable)
 renderPieces pieces =
     List.map
         (\p ->
-            [ Canvas.shapes [ fill p.color ] [ Canvas.circle ( p.x, p.y ) p.r ]
-            , Canvas.text [ Canvas.font { size = 14, family = "serif" }, fill Color.black, Canvas.align Canvas.Center ] ( p.x, p.y + 10 + p.r * 2 ) (String.fromFloat p.x ++ ", " ++ String.fromFloat p.y)
+            [ Canvas.shapes [ fill p.displayColor, Canvas.stroke Color.black ] [ Canvas.circle ( p.x, p.y ) p.r ]
+
+            -- , Canvas.text [ Canvas.font { size = 14, family = "serif" }, fill Color.black, Canvas.align Canvas.Center ] ( p.x, p.y + 10 + p.r * 2 ) (String.fromFloat p.x ++ ", " ++ String.fromFloat p.y)
             ]
         )
         pieces
