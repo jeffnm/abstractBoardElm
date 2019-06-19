@@ -105,14 +105,14 @@ subscriptions _ =
 
 
 type Msg
-    = FormEditProfile
-    | UpdateName String
+    = ToggledEditProfileForm
+    | UpdatedUsername String
     | StartedGame
-    | QuitGame
+    | EndedGame
     | ChangedBoard (Maybe BoardType)
-    | FormAddPiece
-    | FormUpdatePieceSizeChoice String
-    | FormUpdatePieceColorChoice String
+    | ToggledAddPieceForm
+    | UpdatedAddPieceFormSizeChoice String
+    | UpdatedAddPieceFormColorChoice String
     | CreatedPiece
     | CanvasPointerDown ( Float, Float )
     | CanvasPointerUp ( Float, Float )
@@ -122,7 +122,7 @@ type Msg
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
-        FormEditProfile ->
+        ToggledEditProfileForm ->
             case model.username of
                 Just string ->
                     if string == "" then
@@ -134,10 +134,10 @@ update msg model =
                 Nothing ->
                     toggleForm ProfileForm model
 
-        FormAddPiece ->
+        ToggledAddPieceForm ->
             toggleForm AddPieceForm model
 
-        FormUpdatePieceSizeChoice string ->
+        UpdatedAddPieceFormSizeChoice string ->
             case string of
                 "small" ->
                     ( { model | formPieceSizeSelectedOption = string }, Cmd.none )
@@ -151,10 +151,10 @@ update msg model =
                 _ ->
                     ( { model | formPieceSizeSelectedOption = "small" }, Cmd.none )
 
-        FormUpdatePieceColorChoice color ->
+        UpdatedAddPieceFormColorChoice color ->
             ( { model | formPieceColorChoice = color }, Cmd.none )
 
-        UpdateName newName ->
+        UpdatedUsername newName ->
             ( { model | username = Just newName }, Cmd.none )
 
         CreatedPiece ->
@@ -168,7 +168,7 @@ update msg model =
             else
                 ( { model | gameIsActive = True }, Cmd.none )
 
-        QuitGame ->
+        EndedGame ->
             ( { model | gameIsActive = False, gameHasEnded = True, pieces = [], formPieceIsOpen = False }, Cmd.none )
 
         ChangedBoard newBoard ->
@@ -420,7 +420,7 @@ viewMenu model =
             []
             [ navbarStart []
                 [ if model.gameIsActive then
-                    navbarItem False [ disableWhileEditing model QuitGame ] [ text "End Game" ]
+                    navbarItem False [ disableWhileEditing model EndedGame ] [ text "End Game" ]
 
                   else
                     navbarItem False [ disableWhileEditing model StartedGame ] [ text "Start Game" ]
@@ -449,10 +449,10 @@ viewMenu model =
                     True ->
                         case model.formPieceIsOpen of
                             True ->
-                                navbarItem True [ onClick FormAddPiece ] [ text "Close Pieces Form" ]
+                                navbarItem True [ onClick ToggledAddPieceForm ] [ text "Close Pieces Form" ]
 
                             False ->
-                                navbarItem False [ onClick FormAddPiece ] [ text "Create Pieces" ]
+                                navbarItem False [ onClick ToggledAddPieceForm ] [ text "Create Pieces" ]
 
                     False ->
                         navbarItem False [ disabled True ] [ text "" ]
@@ -460,13 +460,13 @@ viewMenu model =
             ]
         , navbarEnd []
             [ if model.formProfileIsOpen then
-                navbarItem False [ onClick FormEditProfile ] [ text "Done Editing" ]
+                navbarItem False [ onClick ToggledEditProfileForm ] [ text "Done Editing" ]
 
               else
                 hoverableNavbarItemDropdown Down
                     []
                     (navbarLink [] [ text (getUsername model) ])
-                    [ navbarDropdown True Centered [] [ navbarItem True [ onClick FormEditProfile ] [ text "Edit Profile" ] ] ]
+                    [ navbarDropdown True Centered [] [ navbarItem True [ onClick ToggledEditProfileForm ] [ text "Edit Profile" ] ] ]
             ]
         ]
 
@@ -516,7 +516,7 @@ viewProfileEditForm model =
         , fieldBody []
             [ field []
                 [ controlLabel [ for "username" ] [ text "Username" ]
-                , controlInput inputModifier [] [ id "username", value (getUsername model), onInput UpdateName ] [ text (getUsername model) ]
+                , controlInput inputModifier [] [ id "username", value (getUsername model), onInput UpdatedUsername ] [ text (getUsername model) ]
                 , controlHelp Default [] []
                 ]
             ]
@@ -547,11 +547,11 @@ viewNewPieceForm model =
             []
         , fieldBody
             [ id "add-piece-form" ]
-            [ field [ class "is-narrow" ] [ controlSelect controlSelectModifiers [ id "size" ] [ class "piece-size-select", onInput FormUpdatePieceSizeChoice ] (viewNewPieceFormSizeOptions model) ]
+            [ field [ class "is-narrow" ] [ controlSelect controlSelectModifiers [ id "size" ] [ class "piece-size-select", onInput UpdatedAddPieceFormSizeChoice ] (viewNewPieceFormSizeOptions model) ]
             , field [ class "is-narrow" ]
                 [ controlSelect controlSelectModifiers
                     [ id "color" ]
-                    [ class "piece-size-select", onInput FormUpdatePieceColorChoice ]
+                    [ class "piece-size-select", onInput UpdatedAddPieceFormColorChoice ]
                     [ Html.option
                         [ value "white"
                         , if model.formPieceColorChoice == "white" then
