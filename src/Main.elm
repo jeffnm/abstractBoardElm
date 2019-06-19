@@ -435,7 +435,7 @@ viewMenu model =
                             [ viewBoardType model ]
                         )
                         [ navbarDropdown True
-                            Centered
+                            Left
                             []
                             [ navbarItem False
                                 [ onClick (ChangedBoard (Just Board1)) ]
@@ -482,36 +482,36 @@ disableWhileEditing model msg =
 
 viewBody : Model -> Html Msg
 viewBody model =
-    container
+    Html.div
         []
         [ if model.formProfileIsOpen then
             viewProfileEditForm model
 
           else
-            viewEmptyContainer
+            viewEmptyDiv
         , if model.formPieceIsOpen then
             viewNewPieceForm model
 
           else
-            viewEmptyContainer
+            viewEmptyDiv
         , container [ style "display" "flex", style "justify-content" "center", style "align-items" "center" ] [ viewCanvas model ]
         ]
 
 
 viewProfileEditForm : Model -> Control Msg
 viewProfileEditForm model =
-    container []
-        [ container [ class "validation-messages" ]
+    Html.div [ id "top-form" ]
+        [ Html.div [ class "validation-messages" ]
             [ case model.username of
                 Just string ->
                     if string == "" then
-                        container [] [ box [ style "color" "red" ] [ text "Username is blank - you'll be Anonymous" ] ]
+                        Html.div [] [ box [ style "color" "red" ] [ text "Username is blank - you'll be Anonymous" ] ]
 
                     else
                         text ""
 
                 Nothing ->
-                    container [] [ box [ style "color" "red" ] [ text "Username is blank - you'll be Anonymous" ] ]
+                    Html.div [] [ box [ style "color" "red" ] [ text "Username is blank - you'll be Anonymous" ] ]
             ]
         , fieldBody []
             [ field []
@@ -542,8 +542,8 @@ viewNewPieceFormSizeOptions model =
 
 viewNewPieceForm : Model -> Html Msg
 viewNewPieceForm model =
-    container []
-        [ container [ class "validation-messages" ]
+    Html.div [ id "top-form" ]
+        [ Html.div [ class "validation-messages" ]
             []
         , fieldBody
             [ id "add-piece-form" ]
@@ -581,9 +581,9 @@ viewNewPieceForm model =
         ]
 
 
-viewEmptyContainer : Html Msg
-viewEmptyContainer =
-    container [] []
+viewEmptyDiv : Html Msg
+viewEmptyDiv =
+    Html.div [] []
 
 
 viewBoardType : Model -> Html Msg
