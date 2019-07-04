@@ -1,7 +1,6 @@
 module Main exposing (main)
 
 import Browser
-import Bulma.CDN exposing (..)
 import Bulma.Columns exposing (..)
 import Bulma.Components exposing (..)
 import Bulma.Elements exposing (..)
@@ -11,7 +10,7 @@ import Bulma.Modifiers exposing (..)
 import Canvas exposing (fill, lineTo, path, rect, shapes)
 import Color
 import Css
-import Html exposing (Html, main_, p, span, text)
+import Html exposing (Html, main_, node, p, span, text)
 import Html.Attributes exposing (..)
 import Html.Events exposing (onClick, onInput)
 import Html.Events.Extra.Pointer as Pointer
@@ -40,8 +39,7 @@ type alias Model =
     , username : Maybe String
     , formProfileIsOpen : Bool
     , formPieceIsOpen : Bool
-    , formPieceSizeSelectedOption : String
-    , formPieceSizeOptions : List String
+    , formPieceSizeSelectedOption : Int
     , formPieceColorChoice : String
     , gameIsActive : Bool
     , gameHasEnded : Bool
@@ -78,8 +76,8 @@ init flags =
       , username = Nothing
       , formProfileIsOpen = False
       , formPieceIsOpen = False
-      , formPieceSizeSelectedOption = "medium"
-      , formPieceSizeOptions = [ "small", "medium", "large" ]
+      , formPieceSizeSelectedOption = 10
+      -- , formPieceSizeOptions = [ "small", "medium", "large" ]
       , formPieceColorChoice = "black"
       , gameIsActive = False
       , gameHasEnded = False
@@ -137,19 +135,26 @@ update msg model =
         ToggledAddPieceForm ->
             toggleForm AddPieceForm model
 
-        UpdatedAddPieceFormSizeChoice string ->
-            case string of
-                "small" ->
-                    ( { model | formPieceSizeSelectedOption = string }, Cmd.none )
+        -- UpdatedAddPieceFormSizeChoice string ->
+        --     case string of
+        --         "small" ->
+        --             ( { model | formPieceSizeSelectedOption = string }, Cmd.none )
+        --
+        --         "medium" ->
+        --             ( { model | formPieceSizeSelectedOption = string }, Cmd.none )
+        --
+        --         "large" ->
+        --             ( { model | formPieceSizeSelectedOption = string }, Cmd.none )
+        --
+        --         _ ->
+        --             ( { model | formPieceSizeSelectedOption = "small" }, Cmd.none )
+        UpdatedAddPieceFormSizeChoice number ->
+            case String.toInt number of
+                Just val ->
+                    ( { model | formPieceSizeSelectedOption = val }, Cmd.none )
 
-                "medium" ->
-                    ( { model | formPieceSizeSelectedOption = string }, Cmd.none )
-
-                "large" ->
-                    ( { model | formPieceSizeSelectedOption = string }, Cmd.none )
-
-                _ ->
-                    ( { model | formPieceSizeSelectedOption = "small" }, Cmd.none )
+                Nothing ->
+                    ( model, Cmd.none )
 
         UpdatedAddPieceFormColorChoice color ->
             ( { model | formPieceColorChoice = color }, Cmd.none )
@@ -161,21 +166,22 @@ update msg model =
             createPiece model
 
         StartedGame ->
-            if model.boardType == Nothing then
-                ( { model | gameIsActive = False }, Cmd.none )
-                -- Should Cmd tell view there is an error? Or is that a model update?
+            case model.boardType of
+                Just boardType ->
+                    ( { model | gameIsActive = True }, Cmd.none )
 
-            else
-                ( { model | gameIsActive = True }, Cmd.none )
+                -- Should Cmd tell view there is an error? Or is that a model update?
+                Nothing ->
+                    ( { model | gameIsActive = False }, Cmd.none )
 
         EndedGame ->
+            -- Make all model changes needed when a game ends
             ( { model | gameIsActive = False, gameHasEnded = True, pieces = [], formPieceIsOpen = False }, Cmd.none )
 
         ChangedBoard newBoard ->
             ( { model | boardType = newBoard }, Cmd.none )
 
         CanvasPointerDown event ->
-            -- Function to take the event and model and return a model
             selectPiece event model
 
         CanvasPointerUp event ->
@@ -185,26 +191,14 @@ update msg model =
             moveSelectedPiece event model
 
 
-
--- ( { model | pointer = event }, Cmd.none )
-
-
 createPiece : Model -> ( Model, Cmd Msg )
 createPiece model =
     let
         id =
-            List.length model.pieces - 1
+            List.length model.pieces
 
-        size =
-            case model.formPieceSizeSelectedOption of
-                "medium" ->
-                    25
-
-                "large" ->
-                    35
-
-                _ ->
-                    15
+        radius =
+            toFloat model.formPieceSizeSelectedOption
 
         color =
             case model.formPieceColorChoice of
@@ -215,7 +209,7 @@ createPiece model =
                     Color.black
 
         piece =
-            Pieces id 500 500 size color color False
+            Pieces id 500 250 radius color color False
 
         pieces =
             List.append model.pieces [ piece ]
@@ -291,9 +285,8 @@ moveSelectedPiece event model =
     in
     case selectedPiece of
         Just a ->
-            updatePiece model (movePiece a model.pointer) event
+            updatePiece model (movePiece a event) event
 
-        --updatePiece model (togglePieceColor { a | isMoving = True })
         Nothing ->
             ( { model | pointer = event }, Cmd.none )
 
@@ -316,9 +309,6 @@ deselectPiece event model =
     in
     case selectedPiece of
         Just a ->
-            --else if a.isMoving then
-            --    updatePiece model (movePiece a event)
-            --else
             updatePiece model (togglePieceDisplayColor { a | isMoving = False }) event
 
         Nothing ->
@@ -354,7 +344,6 @@ selectPiece event model =
     in
     case selectedPiece of
         Just a ->
-            --updatePiece model (movePiece a event)
             updatePiece model (togglePieceDisplayColor { a | isMoving = True }) event
 
         Nothing ->
@@ -371,7 +360,7 @@ view model =
     , body =
         [ viewHeader model
         , viewMenu model
-        , viewBody model
+        , viewMainContent model
         , viewFooter model
         ]
     }
@@ -395,7 +384,8 @@ viewHeader : Model -> Section Msg
 viewHeader model =
     container
         []
-        [ stylesheet
+        [ node "link" [ rel "stylesheet", href "https://cdnjs.cloudflare.com/ajax/libs/bulma/0.7.1/css/bulma.min.css" ] []
+        , node "link" [ rel "stylesheet", href "https://cdn.jsdelivr.net/npm/bulma-slider@2.0.0/dist/css/bulma-slider.min.css" ] []
         , container []
             [ Bulma.Elements.title H1
                 []
@@ -404,15 +394,10 @@ viewHeader model =
         ]
 
 
-
--- viewMenu elements
--- board/game selection
--- profile
--- ???
-
-
 viewMenu : Model -> Html Msg
 viewMenu model =
+    -- This navbar needs a bunch of work to make it properly responsive.
+    -- The management of whether something is expanded or not (other than for hoverableNavbarItemDropdown) is going to need Msg and Update to the Model
     navbar { color = Dark, transparent = False }
         []
         [ navbarBrand [] (navbarBurger False [] [ span [] [], span [] [], span [] [] ]) []
@@ -471,6 +456,10 @@ viewMenu model =
         ]
 
 
+
+-- TODO: Make this function take a form type and use a case pattern match to determine which of the forms to check before doing the if expressions
+
+
 disableWhileEditing : Model -> Msg -> Html.Attribute Msg
 disableWhileEditing model msg =
     if not model.formProfileIsOpen then
@@ -480,8 +469,8 @@ disableWhileEditing model msg =
         class "disabled"
 
 
-viewBody : Model -> Html Msg
-viewBody model =
+viewMainContent : Model -> Html Msg
+viewMainContent model =
     Html.div
         []
         [ if model.formProfileIsOpen then
@@ -523,21 +512,22 @@ viewProfileEditForm model =
         ]
 
 
-viewNewPieceFormSizeOptions : Model -> List (Html Msg)
-viewNewPieceFormSizeOptions model =
-    let
-        options =
-            model.formPieceSizeOptions
-    in
-    List.map
-        (\o ->
-            if model.formPieceSizeSelectedOption == o then
-                Html.option [ value o, selected True ] [ text o ]
 
-            else
-                Html.option [ value o ] [ text o ]
-        )
-        options
+-- viewNewPieceFormSizeOptions : Model -> List (Html Msg)
+-- viewNewPieceFormSizeOptions model =
+-- let
+--     options =
+--         model.formPieceSizeOptions
+-- in
+-- List.map
+--     (\o ->
+--         if model.formPieceSizeSelectedOption == o then
+--             Html.option [ value o, selected True ] [ text o ]
+--
+--         else
+--             Html.option [ value o ] [ text o ]
+--     )
+--     options
 
 
 viewNewPieceForm : Model -> Html Msg
@@ -547,9 +537,22 @@ viewNewPieceForm model =
             []
         , fieldBody
             [ id "add-piece-form" ]
-            [ field [ class "is-narrow" ] [ controlSelect controlSelectModifiers [ id "size" ] [ class "piece-size-select", onInput UpdatedAddPieceFormSizeChoice ] (viewNewPieceFormSizeOptions model) ]
-            , field [ class "is-narrow" ]
-                [ controlSelect controlSelectModifiers
+            [ field [ class "is-narrow", class "has-addons" ]
+                [ controlLabel [ for "piece-size-slider" ] [ text ("Size: " ++ String.fromInt model.formPieceSizeSelectedOption) ]
+                , controlInput inputModifier
+                    []
+                    [ id "piece-size-slider"
+                    , type_ "range"
+                    , step "10"
+                    , Html.Attributes.min "10"
+                    , Html.Attributes.max "50"
+                    , class "slider"
+                    , class "is-info"
+                    , value (String.fromInt model.formPieceSizeSelectedOption)
+                    , onInput UpdatedAddPieceFormSizeChoice
+                    ]
+                    []
+                , controlSelect controlSelectModifiers
                     [ id "color" ]
                     [ class "piece-size-select", onInput UpdatedAddPieceFormColorChoice ]
                     [ Html.option
@@ -573,9 +576,7 @@ viewNewPieceForm model =
                         ]
                         [ text "black" ]
                     ]
-                ]
-            , field [ class "is-narrow" ]
-                [ controlButton buttonModifiers [ id "create-piece" ] [ onClick CreatedPiece ] [ text "Create Piece" ]
+                , controlButton buttonModifiers [ id "create-piece" ] [ onClick CreatedPiece ] [ text "Create Piece" ]
                 ]
             ]
         ]
