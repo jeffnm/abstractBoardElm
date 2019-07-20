@@ -41,6 +41,7 @@ type alias Model =
     , formPieceIsOpen : Bool
     , formPieceSizeSelectedOption : Int
     , formPieceColorChoice : String
+    , formRemovePieceIsOpen : Bool
     , gameIsActive : Bool
     , gameHasEnded : Bool
     , boardType : Maybe BoardType
@@ -68,6 +69,7 @@ type alias Pieces =
 type Form
     = ProfileForm
     | AddPieceForm
+    | RemovePieceForm
 
 
 init : () -> ( Model, Cmd Msg )
@@ -77,6 +79,8 @@ init flags =
       , formProfileIsOpen = False
       , formPieceIsOpen = False
       , formPieceSizeSelectedOption = 10
+      , formRemovePieceIsOpen = False
+
       -- , formPieceSizeOptions = [ "small", "medium", "large" ]
       , formPieceColorChoice = "black"
       , gameIsActive = False
@@ -109,6 +113,7 @@ type Msg
     | EndedGame
     | ChangedBoard (Maybe BoardType)
     | ToggledAddPieceForm
+    | ToggleRemovePieceForm
     | UpdatedAddPieceFormSizeChoice String
     | UpdatedAddPieceFormColorChoice String
     | CreatedPiece
@@ -135,19 +140,9 @@ update msg model =
         ToggledAddPieceForm ->
             toggleForm AddPieceForm model
 
-        -- UpdatedAddPieceFormSizeChoice string ->
-        --     case string of
-        --         "small" ->
-        --             ( { model | formPieceSizeSelectedOption = string }, Cmd.none )
-        --
-        --         "medium" ->
-        --             ( { model | formPieceSizeSelectedOption = string }, Cmd.none )
-        --
-        --         "large" ->
-        --             ( { model | formPieceSizeSelectedOption = string }, Cmd.none )
-        --
-        --         _ ->
-        --             ( { model | formPieceSizeSelectedOption = "small" }, Cmd.none )
+        ToggleRemovePieceForm ->
+            toggleForm RemovePieceForm model
+
         UpdatedAddPieceFormSizeChoice number ->
             case String.toInt number of
                 Just val ->
@@ -218,13 +213,16 @@ createPiece model =
 
 
 toggleForm : Form -> Model -> ( Model, Cmd Msg )
-toggleForm form model =
-    case form of
+toggleForm formToToggle model =
+    case formToToggle of
         ProfileForm ->
             ( { model | formProfileIsOpen = not model.formProfileIsOpen }, Cmd.none )
 
         AddPieceForm ->
             ( { model | formPieceIsOpen = not model.formPieceIsOpen }, Cmd.none )
+
+        RemovePieceForm ->
+            ( { model | formRemovePieceIsOpen = not model.formRemovePieceIsOpen }, Cmd.none )
 
 
 updatePiece : Model -> Pieces -> ( Float, Float ) -> ( Model, Cmd Msg )
@@ -344,10 +342,32 @@ selectPiece event model =
     in
     case selectedPiece of
         Just a ->
-            updatePiece model (togglePieceDisplayColor { a | isMoving = True }) event
+            case model.formRemovePieceIsOpen of
+                True ->
+                    removePiece event model a
+
+                False ->
+                    updatePiece model (togglePieceDisplayColor { a | isMoving = True }) event
 
         Nothing ->
             ( model, Cmd.none )
+
+
+removePiece : ( Float, Float ) -> Model -> Pieces -> ( Model, Cmd Msg )
+removePiece event model piece =
+    let
+        pieces =
+            List.filter
+                (\n ->
+                    if n.id == piece.id then
+                        False
+
+                    else
+                        True
+                )
+                model.pieces
+    in
+    ( { model | pieces = pieces, pointer = event }, Cmd.none )
 
 
 
@@ -410,7 +430,7 @@ viewMenu model =
                   else
                     navbarItem False [ disableWhileEditing model StartedGame ] [ text "Start Game" ]
                 , if model.gameIsActive then
-                    navbarItem False [ disabled True ] [ viewBoardType model ]
+                    navbarItem False [ disabled True, class "disabled" ] [ viewBoardType model ]
 
                   else
                     hoverableNavbarItemDropdown Down
@@ -430,7 +450,7 @@ viewMenu model =
                                 [ text "Board 2" ]
                             ]
                         ]
-                , case model.gameIsActive of
+                , case model.gameIsActive && not model.formRemovePieceIsOpen of
                     True ->
                         case model.formPieceIsOpen of
                             True ->
@@ -438,6 +458,17 @@ viewMenu model =
 
                             False ->
                                 navbarItem False [ onClick ToggledAddPieceForm ] [ text "Create Pieces" ]
+
+                    False ->
+                        navbarItem False [ disabled True ] [ text "" ]
+                , case model.gameIsActive && not model.formPieceIsOpen of
+                    True ->
+                        case model.formRemovePieceIsOpen of
+                            True ->
+                                navbarItem True [ onClick ToggleRemovePieceForm, style "background-color" "red" ] [ text "Stop Removing Pieces" ]
+
+                            False ->
+                                navbarItem False [ onClick ToggleRemovePieceForm ] [ text "Remove Pieces" ]
 
                     False ->
                         navbarItem False [ disabled True ] [ text "" ]
@@ -582,6 +613,14 @@ viewNewPieceForm model =
         ]
 
 
+viewRemovePieceForm : Model -> Html Msg
+viewRemovePieceForm model =
+    Html.div [ id "top-form" ]
+        [ Html.div [ class "validation-messages" ]
+            []
+        ]
+
+
 viewEmptyDiv : Html Msg
 viewEmptyDiv =
     Html.div [] []
@@ -619,7 +658,12 @@ viewCanvas model =
             600
     in
     Canvas.toHtml ( width, height )
-        [ Pointer.onDown (\event -> CanvasPointerDown event.pointer.offsetPos), Pointer.onUp (\event -> CanvasPointerUp event.pointer.offsetPos), Pointer.onMove (\event -> CanvasPointerMove event.pointer.offsetPos), style "width" (String.fromInt width ++ "px"), style "height" (String.fromInt height ++ "px") ]
+        [ Pointer.onDown (\event -> CanvasPointerDown event.pointer.offsetPos)
+        , Pointer.onUp (\event -> CanvasPointerUp event.pointer.offsetPos)
+        , Pointer.onMove (\event -> CanvasPointerMove event.pointer.offsetPos)
+        , style "width" (String.fromInt width ++ "px")
+        , style "height" (String.fromInt height ++ "px")
+        ]
         (currentCanvas model width height)
 
 

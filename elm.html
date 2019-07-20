@@ -6,6 +6,14 @@
   <script src="https://unpkg.com/elm-canvas@2.2.0/elm-canvas.js" type="text/javascript" charset="utf-8" ></script>
   <script src="main.js" type="text/javascript" charset="utf-8" ></script>
   <style>
+
+  .navbar-item:not(.disabled){
+    cursor: pointer;
+  }
+  .navbar-item.disabled {
+    cursor: not-allowed;
+  }
+  
   elm-canvas {border: solid 10px black}
   #top-form {
 
