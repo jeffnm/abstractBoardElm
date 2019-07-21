@@ -641,7 +641,7 @@ viewBoardType model =
 
 viewFooter : Model -> Html Msg
 viewFooter model =
-    footer [ style "padding" "1em", style "border" "1px solid green" ] [ text "By Jeff" ]
+    footer [ style "padding" "1em", style "text-align" "center" ] [ text "By Jeff" ]
 
 
 
@@ -651,20 +651,20 @@ viewFooter model =
 viewCanvas : Model -> Html Msg
 viewCanvas model =
     let
-        width =
+        w =
             1000
 
-        height =
+        h =
             600
     in
-    Canvas.toHtml ( width, height )
+    Canvas.toHtml ( w, h )
         [ Pointer.onDown (\event -> CanvasPointerDown event.pointer.offsetPos)
         , Pointer.onUp (\event -> CanvasPointerUp event.pointer.offsetPos)
         , Pointer.onMove (\event -> CanvasPointerMove event.pointer.offsetPos)
-        , style "width" (String.fromInt width ++ "px")
-        , style "height" (String.fromInt height ++ "px")
+        , style "width" (String.fromInt w ++ "px")
+        , style "height" (String.fromInt h ++ "px")
         ]
-        (currentCanvas model width height)
+        (currentCanvas model w h)
 
 
 currentCanvas : Model -> Int -> Int -> List Canvas.Renderable
@@ -693,7 +693,7 @@ welcomeCanvas model width height =
 gameCanvas : Model -> Int -> Int -> List Canvas.Renderable
 gameCanvas model width height =
     -- make it white
-    -- write boardType on the canvas
+    -- render the currently selected boardType
     [ shapes [ fill Color.white ] [ rect ( 0, 0 ) (toFloat width) (toFloat height) ]
     ]
         ++ renderBoard model.boardType width height
