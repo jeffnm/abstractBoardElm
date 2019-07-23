@@ -480,7 +480,10 @@ viewMenu model =
                                 navbarItem True [ onClick ToggleRemovePieceForm, style "background-color" "red" ] [ text "Stop Removing Pieces" ]
 
                             False ->
-                                navbarItem False [ onClick ToggleRemovePieceForm ] [ text "Remove Pieces" ]
+                                if (List.isEmpty model.pieces) then
+                                    navbarItem False [  disabled True, class "disabled" ] [ text "Remove Pieces" ]
+                                    else 
+                                    navbarItem False [ onClick ToggleRemovePieceForm ] [ text "Remove Pieces" ]
 
                     False ->
                         navbarItem False [ disabled True ] [ text "" ]
