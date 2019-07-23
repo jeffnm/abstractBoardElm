@@ -1,5 +1,7 @@
 module Main exposing (main)
 
+-- import Css
+
 import Browser
 import Bulma.Columns exposing (..)
 import Bulma.Components exposing (..)
@@ -9,12 +11,11 @@ import Bulma.Layout exposing (..)
 import Bulma.Modifiers exposing (..)
 import Canvas exposing (fill, lineTo, path, rect, shapes)
 import Color
-import Css
 import Html exposing (Html, main_, node, p, span, text)
 import Html.Attributes exposing (..)
 import Html.Events exposing (onClick, onInput)
 import Html.Events.Extra.Pointer as Pointer
-import Validate exposing (Validator)
+
 
 
 
@@ -43,6 +44,7 @@ type alias Model =
     , formPieceColorChoice : String
     , formRemovePieceIsOpen : Bool
     , gameIsActive : Bool
+    , gameConfirmEndModalIsOpen : Bool
     , gameHasEnded : Bool
     , boardType : Maybe BoardType
     , pieces : List Pieces
@@ -84,6 +86,7 @@ init flags =
       -- , formPieceSizeOptions = [ "small", "medium", "large" ]
       , formPieceColorChoice = "black"
       , gameIsActive = False
+      , gameConfirmEndModalIsOpen = False
       , gameHasEnded = False
       , boardType = Nothing
       , pieces = []
@@ -110,6 +113,8 @@ type Msg
     = ToggledEditProfileForm
     | UpdatedUsername String
     | StartedGame
+    | AttemptedToEndGame
+    | CloseGameEndConfirmationModal
     | EndedGame
     | ChangedBoard (Maybe BoardType)
     | ToggledAddPieceForm
@@ -169,9 +174,16 @@ update msg model =
                 Nothing ->
                     ( { model | gameIsActive = False }, Cmd.none )
 
+        AttemptedToEndGame ->
+            -- Check if they really wanted to quit
+            ( { model | gameConfirmEndModalIsOpen = True }, Cmd.none )
+
+        CloseGameEndConfirmationModal ->
+            ( { model | gameConfirmEndModalIsOpen = False }, Cmd.none )
+
         EndedGame ->
             -- Make all model changes needed when a game ends
-            ( { model | gameIsActive = False, gameHasEnded = True, pieces = [], formPieceIsOpen = False }, Cmd.none )
+            ( { model | gameIsActive = False, gameHasEnded = True, gameConfirmEndModalIsOpen = False, pieces = [], formPieceIsOpen = False }, Cmd.none )
 
         ChangedBoard newBoard ->
             ( { model | boardType = newBoard }, Cmd.none )
@@ -381,7 +393,7 @@ view model =
         [ viewHeader model
         , viewMenu model
         , viewMainContent model
-        , viewFooter model
+        , viewFooter
         ]
     }
 
@@ -425,7 +437,7 @@ viewMenu model =
             []
             [ navbarStart []
                 [ if model.gameIsActive then
-                    navbarItem False [ disableWhileEditing model EndedGame ] [ text "End Game" ]
+                    navbarItem False [ disableWhileEditing model AttemptedToEndGame ] [ text "End Game" ]
 
                   else
                     navbarItem False [ disableWhileEditing model StartedGame ] [ text "Start Game" ]
@@ -500,6 +512,23 @@ disableWhileEditing model msg =
         class "disabled"
 
 
+viewGameEndModal : Html Msg
+viewGameEndModal =
+    modal True
+        []
+        [ modalBackground [] []
+        , modalContent []
+            [ modalCard [ style "background-color" "white", style "padding" "10px", style "border-radius" "5px" ]
+                [ Html.div []
+                    [ Html.div [] [ text "Are you sure you want to end the game? Nothing will be saved." ]
+                    , Html.div [] [ button buttonModifiers [ onClick EndedGame ] [ text "Yes, I'm sure!" ], button buttonModifiers [ onClick CloseGameEndConfirmationModal ] [ text "No, I want to keep playing." ] ]
+                    ]
+                ]
+            ]
+        , modalClose Large [ onClick CloseGameEndConfirmationModal ] []
+        ]
+
+
 viewMainContent : Model -> Html Msg
 viewMainContent model =
     Html.div
@@ -514,7 +543,14 @@ viewMainContent model =
 
           else
             viewEmptyDiv
-        , container [ style "display" "flex", style "justify-content" "center", style "align-items" "center" ] [ viewCanvas model ]
+        , if model.gameConfirmEndModalIsOpen then
+            viewGameEndModal
+
+          else
+            viewEmptyDiv
+        , container
+            [ style "display" "flex", style "justify-content" "center", style "align-items" "center" ]
+            [ viewCanvas model ]
         ]
 
 
@@ -613,8 +649,8 @@ viewNewPieceForm model =
         ]
 
 
-viewRemovePieceForm : Model -> Html Msg
-viewRemovePieceForm model =
+viewRemovePieceForm : Html Msg
+viewRemovePieceForm =
     Html.div [ id "top-form" ]
         [ Html.div [ class "validation-messages" ]
             []
@@ -639,8 +675,8 @@ viewBoardType model =
             text "Choose Board"
 
 
-viewFooter : Model -> Html Msg
-viewFooter model =
+viewFooter : Html Msg
+viewFooter =
     footer [ style "padding" "1em", style "text-align" "center" ] [ text "By Jeff" ]
 
 
@@ -676,6 +712,7 @@ currentCanvas model width height =
         welcomeCanvas model width height
 
 
+-- Not being actively used, but left in for future debugging
 debugMousePointer : ( Float, Float ) -> Int -> Int -> Canvas.Renderable
 debugMousePointer event width height =
     Canvas.text [ Canvas.font { size = 24, family = "serif" }, Canvas.fill Color.white, Canvas.stroke Color.black, Canvas.align Canvas.Center ] ( toFloat width - 100, toFloat height - 500 ) (String.fromFloat (Tuple.first event) ++ ", " ++ String.fromFloat (Tuple.second event))
@@ -714,13 +751,15 @@ drawTriangle1 ( x, y, length ) =
     path ( x, y ) [ lineTo ( x + l, y ), lineTo ( x + l / 2, y + l ), lineTo ( x, y ) ]
 
 
-drawTriangle2 : ( Float, Float, Float ) -> Canvas.Shape
-drawTriangle2 ( x, y, length ) =
-    let
-        l =
-            length
-    in
-    path ( x, y ) [ lineTo ( x + l, y ), lineTo ( x + l / 2, y - l ), lineTo ( x, y ) ]
+-- No longer used, but saved in case a future board needs a triangle that goes the other way.
+
+-- drawTriangle2 : ( Float, Float, Float ) -> Canvas.Shape
+-- drawTriangle2 ( x, y, length ) =
+--     let
+--         l =
+--             length
+--     in
+--     path ( x, y ) [ lineTo ( x + l, y ), lineTo ( x + l / 2, y - l ), lineTo ( x, y ) ]
 
 
 gameBoardOne : Int -> Int -> List Canvas.Renderable
@@ -775,7 +814,6 @@ gameBoardOne width height =
         (List.map
             drawTriangle1
             triangles
-         -- ++ List.map drawTriangle2 triangles
         )
     ]
 
@@ -832,7 +870,6 @@ gameBoardTwo width height =
         (List.map
             drawTriangle1
             triangles
-         -- ++ List.map drawTriangle2 triangles
         )
     ]
 
