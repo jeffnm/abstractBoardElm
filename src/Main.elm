@@ -1,7 +1,5 @@
 module Main exposing (main)
 
--- import Css
-
 import Browser
 import Bulma.Columns exposing (..)
 import Bulma.Components exposing (..)
@@ -15,7 +13,6 @@ import Html exposing (Html, main_, node, p, span, text)
 import Html.Attributes exposing (..)
 import Html.Events exposing (onClick, onInput)
 import Html.Events.Extra.Pointer as Pointer
-
 
 
 
@@ -52,11 +49,6 @@ type alias Model =
     }
 
 
-type BoardType
-    = Board1
-    | Board2
-
-
 type alias Pieces =
     { id : Int
     , x : Float
@@ -66,6 +58,11 @@ type alias Pieces =
     , displayColor : Color.Color
     , isMoving : Bool
     }
+
+
+type BoardType
+    = Board1
+    | Board2
 
 
 type Form
@@ -398,20 +395,6 @@ view model =
     }
 
 
-inputModifier : ControlInputModifiers msg
-inputModifier =
-    { size = Standard
-    , state = Active
-    , color = Default
-    , expanded = False
-    , rounded = False
-    , readonly = False
-    , disabled = False
-    , iconLeft = Nothing
-    , iconRight = Nothing
-    }
-
-
 viewHeader : Model -> Section Msg
 viewHeader model =
     container
@@ -437,19 +420,19 @@ viewMenu model =
             []
             [ navbarStart []
                 [ if model.gameIsActive then
-                    navbarItem False [ disableWhileEditing model AttemptedToEndGame ] [ text "End Game" ]
+                    navbarItem False [ disableWhileEditingProfile model AttemptedToEndGame ] [ text "End Game" ]
 
                   else
-                    navbarItem False [ disableWhileEditing model StartedGame ] [ text "Start Game" ]
+                    navbarItem False [ disableWhileEditingProfile model StartedGame ] [ text "Start Game" ]
                 , if model.gameIsActive then
-                    navbarItem False [ disabled True, class "disabled" ] [ viewBoardType model ]
+                    navbarItem False [ disabled True, class "disabled" ] [ viewBoardTypeChoice model ]
 
                   else
                     hoverableNavbarItemDropdown Down
                         []
                         (navbarLink
                             [ onClick (ChangedBoard Nothing) ]
-                            [ viewBoardType model ]
+                            [ viewBoardTypeChoice model ]
                         )
                         [ navbarDropdown True
                             Left
@@ -480,9 +463,10 @@ viewMenu model =
                                 navbarItem True [ onClick ToggleRemovePieceForm, style "background-color" "red" ] [ text "Stop Removing Pieces" ]
 
                             False ->
-                                if (List.isEmpty model.pieces) then
-                                    navbarItem False [  disabled True, class "disabled" ] [ text "Remove Pieces" ]
-                                    else 
+                                if List.isEmpty model.pieces then
+                                    navbarItem False [ disabled True, class "disabled" ] [ text "Remove Pieces" ]
+
+                                else
                                     navbarItem False [ onClick ToggleRemovePieceForm ] [ text "Remove Pieces" ]
 
                     False ->
@@ -496,39 +480,9 @@ viewMenu model =
               else
                 hoverableNavbarItemDropdown Down
                     []
-                    (navbarLink [] [ text (getUsername model) ])
+                    (navbarLink [] [ text (viewGetUsername model) ])
                     [ navbarDropdown True Centered [] [ navbarItem True [ onClick ToggledEditProfileForm ] [ text "Edit Profile" ] ] ]
             ]
-        ]
-
-
-
--- TODO: Make this function take a form type and use a case pattern match to determine which of the forms to check before doing the if expressions
-
-
-disableWhileEditing : Model -> Msg -> Html.Attribute Msg
-disableWhileEditing model msg =
-    if not model.formProfileIsOpen then
-        onClick msg
-
-    else
-        class "disabled"
-
-
-viewGameEndModal : Html Msg
-viewGameEndModal =
-    modal True
-        []
-        [ modalBackground [] []
-        , modalContent []
-            [ modalCard [ style "background-color" "white", style "padding" "10px", style "border-radius" "5px" ]
-                [ Html.div []
-                    [ Html.div [] [ text "Are you sure you want to end the game? Nothing will be saved." ]
-                    , Html.div [] [ button buttonModifiers [ onClick EndedGame ] [ text "Yes, I'm sure!" ], button buttonModifiers [ onClick CloseGameEndConfirmationModal ] [ text "No, I want to keep playing." ] ]
-                    ]
-                ]
-            ]
-        , modalClose Large [ onClick CloseGameEndConfirmationModal ] []
         ]
 
 
@@ -557,6 +511,87 @@ viewMainContent model =
         ]
 
 
+viewCanvas : Model -> Html Msg
+viewCanvas model =
+    let
+        w =
+            1000
+
+        h =
+            600
+    in
+    Canvas.toHtml ( w, h )
+        [ Pointer.onDown (\event -> CanvasPointerDown event.pointer.offsetPos)
+        , Pointer.onUp (\event -> CanvasPointerUp event.pointer.offsetPos)
+        , Pointer.onMove (\event -> CanvasPointerMove event.pointer.offsetPos)
+        , style "width" (String.fromInt w ++ "px")
+        , style "height" (String.fromInt h ++ "px")
+        ]
+        (currentCanvas model w h)
+
+
+viewFooter : Html Msg
+viewFooter =
+    footer [ style "padding" "1em", style "text-align" "center" ] [ text "By Jeff" ]
+
+
+
+-- VIEW HELPER FUNCTIONS
+
+
+inputModifier : ControlInputModifiers msg
+inputModifier =
+    { size = Standard
+    , state = Active
+    , color = Default
+    , expanded = False
+    , rounded = False
+    , readonly = False
+    , disabled = False
+    , iconLeft = Nothing
+    , iconRight = Nothing
+    }
+
+
+disableWhileEditingProfile : Model -> Msg -> Html.Attribute Msg
+disableWhileEditingProfile model msg =
+    if not model.formProfileIsOpen then
+        onClick msg
+
+    else
+        class "disabled"
+
+
+viewBoardTypeChoice : Model -> Html Msg
+viewBoardTypeChoice model =
+    case model.boardType of
+        Just Board1 ->
+            text "Board One"
+
+        Just Board2 ->
+            text "Board Two"
+
+        Nothing ->
+            text "Choose Board"
+
+
+viewGameEndModal : Html Msg
+viewGameEndModal =
+    modal True
+        []
+        [ modalBackground [] []
+        , modalContent []
+            [ modalCard [ style "background-color" "white", style "padding" "10px", style "border-radius" "5px" ]
+                [ Html.div []
+                    [ Html.div [] [ text "Are you sure you want to end the game? Nothing will be saved." ]
+                    , Html.div [] [ button buttonModifiers [ onClick EndedGame ] [ text "Yes, I'm sure!" ], button buttonModifiers [ onClick CloseGameEndConfirmationModal ] [ text "No, I want to keep playing." ] ]
+                    ]
+                ]
+            ]
+        , modalClose Large [ onClick CloseGameEndConfirmationModal ] []
+        ]
+
+
 viewProfileEditForm : Model -> Control Msg
 viewProfileEditForm model =
     Html.div [ id "top-form" ]
@@ -575,29 +610,11 @@ viewProfileEditForm model =
         , fieldBody []
             [ field []
                 [ controlLabel [ for "username" ] [ text "Username" ]
-                , controlInput inputModifier [] [ id "username", value (getUsername model), onInput UpdatedUsername ] [ text (getUsername model) ]
+                , controlInput inputModifier [] [ id "username", value (viewGetUsername model), onInput UpdatedUsername ] [ text (viewGetUsername model) ]
                 , controlHelp Default [] []
                 ]
             ]
         ]
-
-
-
--- viewNewPieceFormSizeOptions : Model -> List (Html Msg)
--- viewNewPieceFormSizeOptions model =
--- let
---     options =
---         model.formPieceSizeOptions
--- in
--- List.map
---     (\o ->
---         if model.formPieceSizeSelectedOption == o then
---             Html.option [ value o, selected True ] [ text o ]
---
---         else
---             Html.option [ value o ] [ text o ]
---     )
---     options
 
 
 viewNewPieceForm : Model -> Html Msg
@@ -665,45 +682,18 @@ viewEmptyDiv =
     Html.div [] []
 
 
-viewBoardType : Model -> Html Msg
-viewBoardType model =
-    case model.boardType of
-        Just Board1 ->
-            text "Board One"
-
-        Just Board2 ->
-            text "Board Two"
+viewGetUsername : Model -> String
+viewGetUsername model =
+    case model.username of
+        Just username ->
+            username
 
         Nothing ->
-            text "Choose Board"
-
-
-viewFooter : Html Msg
-viewFooter =
-    footer [ style "padding" "1em", style "text-align" "center" ] [ text "By Jeff" ]
+            "Anonymous"
 
 
 
 -- Canvas Management
-
-
-viewCanvas : Model -> Html Msg
-viewCanvas model =
-    let
-        w =
-            1000
-
-        h =
-            600
-    in
-    Canvas.toHtml ( w, h )
-        [ Pointer.onDown (\event -> CanvasPointerDown event.pointer.offsetPos)
-        , Pointer.onUp (\event -> CanvasPointerUp event.pointer.offsetPos)
-        , Pointer.onMove (\event -> CanvasPointerMove event.pointer.offsetPos)
-        , style "width" (String.fromInt w ++ "px")
-        , style "height" (String.fromInt h ++ "px")
-        ]
-        (currentCanvas model w h)
 
 
 currentCanvas : Model -> Int -> Int -> List Canvas.Renderable
@@ -715,16 +705,10 @@ currentCanvas model width height =
         welcomeCanvas model width height
 
 
--- Not being actively used, but left in for future debugging
-debugMousePointer : ( Float, Float ) -> Int -> Int -> Canvas.Renderable
-debugMousePointer event width height =
-    Canvas.text [ Canvas.font { size = 24, family = "serif" }, Canvas.fill Color.white, Canvas.stroke Color.black, Canvas.align Canvas.Center ] ( toFloat width - 100, toFloat height - 500 ) (String.fromFloat (Tuple.first event) ++ ", " ++ String.fromFloat (Tuple.second event))
-
-
 welcomeCanvas : Model -> Int -> Int -> List Canvas.Renderable
 welcomeCanvas model width height =
     [ shapes [ fill Color.black ] [ rect ( 0, 0 ) (toFloat width) (toFloat height) ]
-    , renderGreeting (getUsername model) model.gameHasEnded width height
+    , renderGreeting (viewGetUsername model) model.gameHasEnded width height
 
     -- , debugMousePointer model.pointer width height
     ]
@@ -741,8 +725,8 @@ gameCanvas model width height =
 
 
 
--- ++ [ debugMousePointer model.pointer width height ]
--- Game Boards
+-- GAME BOARD CONSTRUCTION
+-- Background Shapes
 
 
 drawTriangle1 : ( Float, Float, Float ) -> Canvas.Shape
@@ -754,15 +738,21 @@ drawTriangle1 ( x, y, length ) =
     path ( x, y ) [ lineTo ( x + l, y ), lineTo ( x + l / 2, y + l ), lineTo ( x, y ) ]
 
 
--- No longer used, but saved in case a future board needs a triangle that goes the other way.
 
--- drawTriangle2 : ( Float, Float, Float ) -> Canvas.Shape
--- drawTriangle2 ( x, y, length ) =
---     let
---         l =
---             length
---     in
---     path ( x, y ) [ lineTo ( x + l, y ), lineTo ( x + l / 2, y - l ), lineTo ( x, y ) ]
+-- Not currently used:
+
+
+drawTriangle2 : ( Float, Float, Float ) -> Canvas.Shape
+drawTriangle2 ( x, y, length ) =
+    let
+        l =
+            length
+    in
+    path ( x, y ) [ lineTo ( x + l, y ), lineTo ( x + l / 2, y - l ), lineTo ( x, y ) ]
+
+
+
+-- Game Boards
 
 
 gameBoardOne : Int -> Int -> List Canvas.Renderable
@@ -801,17 +791,11 @@ gameBoardOne width height =
 
                     else
                         ( (toFloat n + toFloat i * tSize) + offset, y, tSize )
-                 -- ( toFloat (n + i * tSize)
-                 -- , y
-                 -- , tSize
-                 -- )
                 )
                 columns
 
         triangles =
             List.concat (List.indexedMap (\i n -> drawrow (toFloat (n + (i * tSize))) i) rows)
-
-        -- [ ( 50, y, tSize ), ( 100, y, tSize ), ( 150, y, tSize ), ( 200, y, tSize ) ]
     in
     [ shapes [ fill Color.white, Canvas.stroke Color.black ]
         (List.map
@@ -857,17 +841,11 @@ gameBoardTwo width height =
 
                     else
                         ( (toFloat n + toFloat i * tSize) + offset, y, tSize )
-                 -- ( toFloat (n + i * tSize)
-                 -- , y
-                 -- , tSize
-                 -- )
                 )
                 columns
 
         triangles =
             List.concat (List.indexedMap (\i n -> drawrow (toFloat (n + (i * tSize))) i) rows)
-
-        -- [ ( 50, y, tSize ), ( 100, y, tSize ), ( 150, y, tSize ), ( 200, y, tSize ) ]
     in
     [ shapes [ fill Color.white, Canvas.stroke Color.black ]
         (List.map
@@ -875,16 +853,6 @@ gameBoardTwo width height =
             triangles
         )
     ]
-
-
-getUsername : Model -> String
-getUsername model =
-    case model.username of
-        Just username ->
-            username
-
-        Nothing ->
-            "Anonymous"
 
 
 renderGreeting : String -> Bool -> Int -> Int -> Canvas.Renderable
@@ -900,6 +868,10 @@ renderGreeting username gameHasEnded width height =
     Canvas.text [ Canvas.font { size = 24, family = "serif" }, fill Color.white, Canvas.align Canvas.Center ] ( toFloat width / 2, toFloat height / 2 ) greeting
 
 
+
+-- Render Functions
+
+
 renderBoard : Maybe BoardType -> Int -> Int -> List Canvas.Renderable
 renderBoard boardType width height =
     case boardType of
@@ -910,7 +882,7 @@ renderBoard boardType width height =
             gameBoardTwo width height
 
         Nothing ->
-            -- default to game board one if this unwante state occurs
+            -- default to game board one if this unwanted state occurs
             gameBoardOne width height
 
 
@@ -924,3 +896,13 @@ renderPieces pieces =
             ]
         )
         pieces
+
+
+
+-- DEBUG FUNCTIONS
+-- Not being actively used, but left in for future debugging
+
+
+debugMousePointer : ( Float, Float ) -> Int -> Int -> Canvas.Renderable
+debugMousePointer event width height =
+    Canvas.text [ Canvas.font { size = 24, family = "serif" }, Canvas.fill Color.white, Canvas.stroke Color.black, Canvas.align Canvas.Center ] ( toFloat width - 100, toFloat height - 500 ) (String.fromFloat (Tuple.first event) ++ ", " ++ String.fromFloat (Tuple.second event))
